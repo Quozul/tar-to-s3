@@ -1,0 +1,40 @@
+#! /bin/bash
+# For this script, it's advisable to use a shell, such as Bash,
+# that supports a TAR_FD value greater than 9.
+
+STORAGE_CLASS="STANDARD" # or GLACIER_IR
+
+current_archive=$TAR_ARCHIVE
+name=`expr $TAR_ARCHIVE : '\(.*\)-.*'`
+if [ -z ${TAR_VOLUME} ]; then
+    next_archive=$TAR_ARCHIVE
+else
+    next_archive=${name:-$TAR_ARCHIVE}-$TAR_VOLUME
+fi
+
+echo Preparing volume $TAR_VOLUME of $TAR_ARCHIVE.
+
+upload_to_s3() {
+    aws s3 cp --storage-class $STORAGE_CLASS $1 s3://$BUCKET_NAME/
+    rm $current_archive
+}
+
+download_from_s3() {
+    rm -f $current_archive
+    echo Downloading $1 from S3.
+    aws s3 cp s3://$BUCKET_NAME/$1 .
+}
+
+case $TAR_SUBCOMMAND in
+-c)       upload_to_s3 $current_archive ;;
+-d|-x|-t) download_from_s3 $next_archive && test -r $next_archive || exit 1
+          ;;
+*)        exit 1
+esac
+
+if [ -z ${TAR_FD} ]; then
+    echo "No TAR_FD defined"
+else
+    echo $next_archive >&$TAR_FD
+fi
+echo $next_archive >$LAST
